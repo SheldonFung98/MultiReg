@@ -1,0 +1,9 @@
+data/
+.vscode/
+.DS_Store
+build/
+output/
+__pycache__/
+*.egg-info/
+*.tar
+*.so
