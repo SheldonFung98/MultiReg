@@ -19,98 +19,109 @@ except ImportError:
 eps = 1e-8
 
 def visualization(data_dict, output_dict, metrics):
-    src_points_f = output_dict["src_points_f"]
-    ref_points_f = output_dict["ref_points_f"]
-    estimated_transform = output_dict["estimated_transforms"]
-    all_ref_corr_points = output_dict['all_ref_corr_points']
-    all_src_corr_points = output_dict['all_src_corr_points']
-    psc = PSC().vedo(bg_color=[1.0, 1.0, 1.0], subplot=4)\
-        .add_pcd(src_points_f, estimated_transform[0]) \
-        .draw_at(1) \
-        .add_pcd(ref_points_f) \
-        .draw_at(2)
-    psc.add_pcd(src_points_f).add_pcd(ref_points_f).add_lines(all_src_corr_points, all_ref_corr_points, color=[1,0,0]).draw_at(3)
-    psc.add_pcd(ref_points_f)
-    for i in range(len(estimated_transform)):
-        psc.add_pcd(src_points_f, estimated_transform[i])
-    psc.show()
+	src_points_f = output_dict["src_points_f"]
+	ref_points_f = output_dict["ref_points_f"]
+	estimated_transform = output_dict["estimated_transforms"]
+	all_ref_corr_points = output_dict['all_ref_corr_points']
+	all_src_corr_points = output_dict['all_src_corr_points']
+	blue = torch.tensor([0.0, 0.325, 0.616], dtype=torch.float32).to(src_points_f.device)  # 00509d
+	yellow = torch.tensor([1.0, 0.863, 0.0], dtype=torch.float32).to(src_points_f.device)  # fdc500
+	ref_points_color = yellow.unsqueeze(0).repeat(ref_points_f.shape[0], 1)
+	src_points_color = blue.unsqueeze(0).repeat(src_points_f.shape[0], 1)
+	all_src_corr_points_gt = apply_transform(all_src_corr_points, estimated_transform[0])
+	all_corr = torch.cat((all_src_corr_points_gt, all_ref_corr_points), dim=1)
+	all_corr_sampled = all_corr[torch.randperm(all_corr.size(0))[:200]]  # Randomly sample 200 correspondences
+	src_corr = all_corr_sampled[:, :3]
+	ref_corr = all_corr_sampled[:, 3:]
+	src_points_f_gt = apply_transform(src_points_f, estimated_transform[0])
+	offset = torch.tensor([0.0, 0.0, -0.05]).to(src_points_f.device)
+	psc = PSC().vedo(bg_color=[1.0, 1.0, 1.0], subplot=4)\
+		.add_pcd(src_points_f, estimated_transform[0]).add_color(src_points_color) \
+		.draw_at(1) \
+		.add_pcd(ref_points_f).add_color(ref_points_color) \
+		.draw_at(2)
+	psc.add_pcd(src_points_f_gt+offset).add_color(src_points_color).add_pcd(ref_points_f).add_color(ref_points_color).add_lines(src_corr+offset, ref_corr, colors=[0,1,0]).draw_at(3)
+	psc.add_pcd(ref_points_f).add_color(ref_points_color)
+	for i in range(len(estimated_transform)):
+		psc.add_pcd(src_points_f, estimated_transform[i])
+	psc.show()
 
 def run_one_epoch(
-        engine,
-        data_loader,
-        model,
-        evaluator,
-        training=True
+		engine,
+		data_loader,
+		model,
+		evaluator,
+		training=False
 ):
-    if training:
-        model.train()
-    else:
-        model.eval()
-    inlier_ratio_num=0
-    mean_pre=0
-    mean_recall=0
-    for i, data_dict in enumerate(data_loader):
-        data_dict = to_cuda(data_dict)
-        with torch.no_grad():
-            output_dict = model(data_dict)
-            estimated_transforms_gt=data_dict['transform']
-            all_ref_corr_points = output_dict['all_ref_corr_points']
-            all_src_corr_points = output_dict['all_src_corr_points']
-            metrics = evaluator(output_dict, data_dict)
-            mean_pre += metrics['precision']
-            mean_recall += metrics['recall']
-            corr_tensor = torch.cat((all_src_corr_points, all_ref_corr_points), dim=1)
-            align_src_points = apply_transform(corr_tensor[:,:3].unsqueeze(0), estimated_transforms_gt)
-            rmse = torch.linalg.norm(align_src_points - corr_tensor[:,3:].unsqueeze(0), dim=-1)<(0.005)
-            inlier_ratio = (rmse.float().sum(0)>0)
-            inlier_ratio = inlier_ratio.float().sum()/len(inlier_ratio)
-            metrics['inlier_ratio'] = inlier_ratio
-            msg = 'Iter [{}/{}]: precision: {:.3f}, '.format(
-                i + 1,
-                len(data_loader),
-                100*mean_pre/(i+1)) + \
-                'recall: {:.3f}, '.format(100*mean_recall/(i+1)) + \
-                'inlier_ratio: {:.3f}. '.format(100*inlier_ratio)
-            engine.logger.info(msg)
+	if training:
+		model.train()
+	else:
+		model.eval()
+	inlier_ratio_num=0
+	mean_pre=0
+	mean_recall=0
+	for i, data_dict in enumerate(data_loader):
+		data_dict = to_cuda(data_dict)
+		with torch.no_grad():
+			output_dict = model(data_dict)
+			estimated_transforms_gt=data_dict['transform']
+			all_ref_corr_points = output_dict['all_ref_corr_points']
+			all_src_corr_points = output_dict['all_src_corr_points']
+			metrics = evaluator(output_dict, data_dict)
+			mean_pre += metrics['precision']
+			mean_recall += metrics['recall']
+			corr_tensor = torch.cat((all_src_corr_points, all_ref_corr_points), dim=1)
+			align_src_points = apply_transform(corr_tensor[:,:3].unsqueeze(0), estimated_transforms_gt)
+			rmse = torch.linalg.norm(align_src_points - corr_tensor[:,3:].unsqueeze(0), dim=-1)<(0.005)
+			inlier_ratio = (rmse.float().sum(0)>0)
+			inlier_ratio = inlier_ratio.float().sum()/len(inlier_ratio)
+			metrics['inlier_ratio'] = inlier_ratio
+			msg = 'Iter [{}/{}]: precision: {:.3f}, '.format(
+				i + 1,
+				len(data_loader),
+				100*mean_pre/(i+1)) + \
+				'recall: {:.3f}, '.format(100*mean_recall/(i+1)) + \
+				'inlier_ratio: {:.3f}. '.format(100*inlier_ratio)
+			engine.logger.info(msg)
 
-            if len(all_src_corr_points)>1:
-                inlier_ratio_num+=inlier_ratio
-            visualization(data_dict, output_dict, metrics)
+			if len(all_src_corr_points)>1:
+				inlier_ratio_num+=inlier_ratio
+			visualization(data_dict, output_dict, metrics)
 
-    recall=100*mean_recall/len(data_loader)
-    precision=100*mean_pre/len(data_loader)
+	recall=100*mean_recall/len(data_loader)
+	precision=100*mean_pre/len(data_loader)
 
-    message = 'precision: {:.3f}, '.format(precision) + \
-                'recall: {:.3f}, '.format(recall) + \
-                'inlier_ratio: {:.3f}, '.format(100*inlier_ratio_num/(len(data_loader))) + \
-                'f1: {:.3f}. '.format(2 * (precision ) * (recall) / ((recall  +precision)))
-    engine.logger.info(message)
+	message = 'precision: {:.3f}, '.format(precision) + \
+				'recall: {:.3f}, '.format(recall) + \
+				'inlier_ratio: {:.3f}, '.format(100*inlier_ratio_num/(len(data_loader))) + \
+				'f1: {:.3f}. '.format(2 * (precision ) * (recall) / ((recall  +precision)))
+	engine.logger.info(message)
 
 
 def main():
-    log_file = osp.join(config.logs_dir, 'test-{}.log'.format(time.strftime('%Y%m%d-%H%M%S')))
-    with Engine(log_file=log_file, seed=config.seed) as engine:
-        start_time = time.time()
+	log_file = osp.join(config.logs_dir, 'test-{}.log'.format(time.strftime('%Y%m%d-%H%M%S')))
+	with Engine(log_file=log_file, seed=config.seed) as engine:
+		start_time = time.time()
 
-        test_loader,neighborhood_limits = ROBI_test_data_loader(engine, config)
-        loading_time = time.time() - start_time
+		test_loader,neighborhood_limits = ROBI_test_data_loader(engine, config)
+		loading_time = time.time() - start_time
 
-        message = 'Data loader created: {:.3f}s collapsed.'.format(loading_time)
-        engine.logger.info(message)
+		message = 'Data loader created: {:.3f}s collapsed.'.format(loading_time)
+		engine.logger.info(message)
 
-        model = create_model(config).cuda()
-        evaluator = Evaluator(config).cuda()
+		model = create_model(config).cuda()
+		evaluator = Evaluator(config).cuda()
 
-        engine.register_state(model=model)
-        engine.load_snapshot(engine.args.snapshot)
+		engine.register_state(model=model)
+		engine.load_snapshot(engine.args.snapshot)
 
-        start_time = time.time()
-        run_one_epoch(engine, test_loader, model, evaluator, training=False)
+		start_time = time.time()
+		run_one_epoch(engine, test_loader, model, evaluator, training=False)
 
-        loading_time = time.time() - start_time
-        message = ' test_one_epoch: {:.3f}s collapsed.'.format(loading_time)
-        engine.logger.info(message)
+		loading_time = time.time() - start_time
+		message = ' test_one_epoch: {:.3f}s collapsed.'.format(loading_time)
+		engine.logger.info(message)
 
 
 if __name__ == '__main__':
-    main()
+	main()

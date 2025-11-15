@@ -1,6 +1,11 @@
 # MultiReg
 Point Cloud Registration for Multi-objects Matching
 
+<p align="center">
+  <img src="assets/sample.png" width="45%" />
+  <img src="assets/banner.png" width="45%" />
+</p>
+
 ## Installation
 Use conda to create environment:
 ```
@@ -17,6 +22,7 @@ Download pretrained weights
 ```
 wget https://github.com/SheldonFung98/MultiReg/releases/download/V1.0.0/multireg.tar -P weights
 ```
+Install [PointScope](https://github.com/SheldonFung98/PointScope) for visualization
 ```
 cd demo
 python3 inference.py
