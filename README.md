@@ -12,6 +12,16 @@ python3 setup.py build develop
 ```
 
 ## Demo
+### Inference & Visualization
+Download pretrained weights
+```
+wget https://github.com/SheldonFung98/MultiReg/releases/download/V1.0.0/multireg.tar -P weights
+```
+```
+cd demo
+python3 inference.py
+```
+### Model Training
 You need to pre-download dataset [ROBI](https://www.trailab.utias.utoronto.ca/robi). The object model in ROBI should be the [reconstructed model](https://drive.google.com/file/d/1mdY9qmlWwYYY4rX7YBWaE1X1tBJDBq7o/view?usp=sharing). 
 
 ```text
@@ -25,13 +35,7 @@ MultiReg
             |--Gear
                 |--Scene_1
 ```
-
-### Inference & Visualization
-```
-cd demo
-python3 inference.py
-```
-### Model Training
+Then run the training script
 ```
 cd demo
 python3 trainval.py
